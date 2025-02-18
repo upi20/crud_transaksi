@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Transaction;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
@@ -15,7 +16,7 @@ class TransactionController extends Controller
 
     public function create()
     {
-        return view('transactions.create');
+        return view('transactions.form');
     }
 
     public function store(Request $request)
@@ -38,7 +39,19 @@ class TransactionController extends Controller
 
     public function destroy(Transaction $transaction)
     {
+        DB::beginTransaction();
+        // Kembalikan stok produk dari setiap detail transaksi
+        foreach ($transaction->details as $detail) {
+            $product = $detail->product;
+            $product->stok += $detail->quantity;
+            $product->save();
+        }
+
+        // Hapus transaksi dan detailnya
+        $transaction->details()->delete();
         $transaction->delete();
-        return redirect()->route('transactions.index')->with('success', 'Transaksi berhasil dihapus');
+        DB::commit();
+
+        return redirect()->route('transactions.index')->with('success', 'Transaksi berhasil dihapus dan stok produk dikembalikan.');
     }
 }

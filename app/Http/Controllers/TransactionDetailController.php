@@ -1,17 +1,20 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\TransactionDetail;
 use App\Models\Transaction;
 use App\Models\Product;
+use Illuminate\Support\Facades\DB;
 
 class TransactionDetailController extends Controller
 {
     public function index(Transaction $transaction)
     {
         $details = $transaction->details()->with('product')->get();
-        return view('transaction_details.index', compact('transaction', 'details'));
+        $products = Product::all();
+        return view('transaction_details.index', compact('transaction', 'details', 'products'));
     }
 
     public function store(Request $request, Transaction $transaction)
@@ -28,6 +31,7 @@ class TransactionDetailController extends Controller
             return redirect()->back()->with('error', 'Stok tidak mencukupi untuk produk ini.');
         }
 
+        DB::beginTransaction();
         // Simpan detail transaksi
         $detail = new TransactionDetail();
         $detail->id_transaksi = $transaction->id;
@@ -38,7 +42,23 @@ class TransactionDetailController extends Controller
         // Kurangi stok produk
         $product->stok -= $request->quantity;
         $product->save();
+        DB::commit();
 
-        return redirect()->route('transactions.index')->with('success', 'Produk berhasil ditambahkan ke transaksi.');
+        return redirect()->back()->with('success', 'Produk berhasil ditambahkan ke transaksi.');
+    }
+
+    public function destroy(Transaction $transaction, TransactionDetail $detail)
+    {
+        DB::beginTransaction();
+        // Kembalikan stok produk
+        $product = $detail->product;
+        $product->stok += $detail->quantity;
+        $product->save();
+
+        // Hapus detail transaksi
+        $detail->delete();
+        DB::commit();
+
+        return redirect()->back()->with('success', 'Produk berhasil dihapus dari transaksi dan stok dikembalikan.');
     }
 }
